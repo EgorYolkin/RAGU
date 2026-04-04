@@ -22,6 +22,7 @@ class ParsedSection:
 class NoteLink:
     source_path: str
     target_path: str
+    target_anchor: str | None
     edge_type: Literal["links_to", "links_to_heading", "links_to_block", "embed"]
 
 

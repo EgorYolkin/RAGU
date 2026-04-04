@@ -20,6 +20,7 @@ def test_domain_dataclasses_capture_expected_values() -> None:
     link = NoteLink(
         source_path="notes/example.md",
         target_path="notes/target.md",
+        target_anchor=None,
         edge_type="links_to",
     )
     note = ParsedNote(
