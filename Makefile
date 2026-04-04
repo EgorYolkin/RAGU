@@ -1,7 +1,7 @@
 PYTHON := .venv/bin/python
 UV := uv
 
-.PHONY: sync lock test lint format doctor reindex eval
+.PHONY: sync lock test lint format doctor reindex eval query
 
 sync:
 	$(UV) sync
@@ -26,3 +26,6 @@ reindex:
 
 eval:
 	$(UV) run python scripts/eval_rag.py
+
+query:
+	$(UV) run python scripts/query_ollama.py "$(QUERY)"

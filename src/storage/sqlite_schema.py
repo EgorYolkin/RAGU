@@ -52,4 +52,13 @@ SCHEMA_STATEMENTS = (
         body
     )
     """,
+    """
+    CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+        chunk_id UNINDEXED,
+        note_id UNINDEXED,
+        path UNINDEXED,
+        heading_path UNINDEXED,
+        chunk_text
+    )
+    """,
 )
