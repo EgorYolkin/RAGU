@@ -14,6 +14,7 @@ class Settings:
     generator_model: str = "qwen3:8b"
     embedding_model: str = "embeddinggemma"
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    ollama_keep_alive: str = "10m"
     chunk_size: int = 800
     chunk_overlap: int = 120
 
@@ -39,6 +40,10 @@ class Settings:
             reranker_model=os.getenv(
                 "OBSIDIAN_RAG_RERANKER_MODEL",
                 "BAAI/bge-reranker-v2-m3",
+            ),
+            ollama_keep_alive=os.getenv(
+                "OBSIDIAN_RAG_OLLAMA_KEEP_ALIVE",
+                "10m",
             ),
             chunk_size=int(os.getenv("OBSIDIAN_RAG_CHUNK_SIZE", "800")),
             chunk_overlap=int(os.getenv("OBSIDIAN_RAG_CHUNK_OVERLAP", "120")),

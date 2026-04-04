@@ -35,6 +35,7 @@ def main() -> None:
     answerer = OllamaAnswerer(
         base_url=settings.ollama_base_url,
         model=settings.generator_model,
+        keep_alive=settings.ollama_keep_alive,
     )
     result = answerer.answer(compiled_context)
 

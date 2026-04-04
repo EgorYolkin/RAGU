@@ -16,9 +16,16 @@ class AnswerResult:
 
 
 class OllamaAnswerer:
-    def __init__(self, *, base_url: str, model: str) -> None:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        model: str,
+        keep_alive: str = "10m",
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.keep_alive = keep_alive
 
     def answer(self, compiled_context: CompiledContext) -> AnswerResult:
         user_prompt = build_user_prompt(compiled_context)
@@ -35,6 +42,7 @@ class OllamaAnswerer:
         payload = {
             "model": self.model,
             "stream": False,
+            "keep_alive": self.keep_alive,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
@@ -71,6 +79,7 @@ class OllamaAnswerer:
             {
                 "model": self.model,
                 "stream": False,
+                "keep_alive": self.keep_alive,
                 "prompt": full_prompt,
             },
         )
