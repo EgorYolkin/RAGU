@@ -1,170 +1,93 @@
 # Obsidian RAG
 
-Локальный RAG-проект для поиска и ответа по заметкам в стиле Obsidian.
+Локальный RAG-ассистент по заметкам Obsidian. Работает полностью офлайн — все модели запускаются локально через Ollama.
 
-Цель проекта: построить local-first систему, которая работает напрямую с Markdown-заметками, учитывает явный граф ссылок Obsidian и комбинирует несколько видов retrieval вместо наивного "только vector search".
+## Установка (Mac)
 
-Текущий статус: ранний каркас проекта. Структура модулей, доменные модели, `uv`-окружение, lockfile, базовые команды и smoke-test уже подготовлены. Большая часть прикладной логики пока не реализована.
+```bash
+git clone <repo>
+cd obsidian_rag
+./install.sh
+```
 
-## Что планируется
+Скрипт автоматически:
+1. Устанавливает Homebrew, uv, Ollama (если не установлены)
+2. Скачивает модели `nomic-embed-text` и `gemma3:4b`
+3. Создаёт `.env` из `.env.example`
+4. Индексирует vault (если путь уже указан в `.env`)
 
-- чтение заметок напрямую из vault, в том числе из iCloud Drive
-- парсинг Markdown, frontmatter, тегов, заголовков и `[[wikilinks]]`
-- построение собственного графа заметок
-- гибридный retrieval:
-  - dense retrieval
-  - lexical retrieval через SQLite FTS5 / BM25
-  - graph expansion по ссылкам, тегам и соседям
-- reranking кандидатов перед генерацией ответа
-- сборка контекста с provenance и ссылками на источники
-- локальная генерация ответа через небольшую модель
+После установки отредактируй `.env` и укажи путь к vault:
 
-## Почему не только vector search
+```
+OBSIDIAN_RAG_VAULT_PATH="/Users/you/Documents/notes"
+```
 
-В личной базе знаний релевантность часто определяется не только семантической близостью. Важны также:
+Затем:
 
-- прямые ссылки между заметками
-- общие теги и frontmatter
-- соседство по папкам
-- временная близость изменений
-- точные совпадения терминов и названий
+```bash
+make reindex
+```
 
-Поэтому целевая архитектура проекта: graph-assisted local RAG, а не pure vector search.
+## Использование
+
+```bash
+# Задать вопрос
+make query QUERY="с какими людьми я знаком?"
+
+# С подробным выводом timing и метрик LLM
+make query QUERY="напиши алгоритм фибоначчи на golang" ARGS="--debug"
+
+# Переиндексировать vault после изменений
+make reindex
+```
+
+Или напрямую:
+
+```bash
+uv run python scripts/query_ollama.py "твой вопрос"
+uv run python scripts/query_ollama.py "твой вопрос" --debug
+```
+
+## Конфигурация (.env)
+
+| Переменная | По умолчанию | Описание |
+|---|---|---|
+| `OBSIDIAN_RAG_VAULT_PATH` | — | Путь к Obsidian vault |
+| `OBSIDIAN_RAG_GENERATOR_MODEL` | `gemma3:4b` | Модель генерации |
+| `OBSIDIAN_RAG_EMBEDDING_MODEL` | `nomic-embed-text` | Модель эмбеддингов |
+| `OBSIDIAN_RAG_CONTEXT_TOKEN_BUDGET` | `400` | Макс. токенов контекста |
+| `OBSIDIAN_RAG_OLLAMA_KEEP_ALIVE` | `-1` | Время жизни модели в памяти (`-1` = бесконечно) |
+
+Рекомендуемые модели генерации по скорости/качеству:
+
+| Модель | Скорость (M3 Pro) | Качество |
+|---|---|---|
+| `gemma3:4b` | ~40 tok/s | базовое |
+| `gemma3:12b` | ~15 tok/s | хорошее |
+| `qwen3:8b` | ~20 tok/s | хорошее |
 
 ## Архитектура
 
-Целевой pipeline:
-
-```text
+```
 запрос
--> planner
--> parallel retrieval
-   -> dense retrieval
-   -> lexical retrieval
-   -> graph retrieval
--> fusion
--> rerank
--> context compiler
--> local LLM
--> ответ с цитатами
+→ dense retrieval (nomic-embed-text + numpy cosine)  ┐ параллельно
+→ lexical retrieval (SQLite FTS5 + title search)     ┘
+→ graph retrieval (wikilinks + backlinks)
+→ fusion (dense 0.45 + lexical 0.25 + title 0.20 + graph 0.10)
+→ rerank (FlagEmbedding если установлен, иначе fusion score)
+→ context compiler (token budget)
+→ Ollama streaming
+→ ответ с источниками
 ```
 
-Планируемый стек:
+- **Хранилище**: SQLite (метаданные, FTS5, граф ссылок, эмбеддинги как BLOB)
+- **Граф**: wikilinks `[[Note]]` резолвятся в реальные пути vault
+- **Эмбеддинги**: title-prepended (`"NoteTitle\nchunk text"`) для лучшего recall
 
-- Python 3.12+
-- `uv` для управления окружением и зависимостями
-- FastAPI для локального API
-- SQLite как каноническое хранилище метаданных, графа и FTS5 индекса
-- Qdrant local mode для dense retrieval
-- Ollama для локальных моделей
-
-## Структура репозитория
-
-```text
-config/     конфигурация проекта
-scripts/    служебные скрипты
-src/        исходный код
-tests/      unit/integration/e2e тесты
-PLAN.md     архитектурный и продуктовый план
-```
-
-Основные каталоги внутри `src/`:
-
-- `src/domain/` — доменные модели и protocol-контракты
-- `src/ingest/` — ingestion pipeline
-- `src/storage/` — SQLite/Qdrant адаптеры
-- `src/retrieve/` — retrieval, fusion и rerank
-- `src/synth/` — сборка контекста и генерация ответа
-- `src/api/` — API слой
-- `src/services/` — orchestration/use-case слой
-- `src/eval/` — оценка качества RAG
-
-## Быстрый старт
-
-Требования:
-
-- Python 3.12+
-- установленный `uv`
-
-Установка зависимостей:
+## Разработка
 
 ```bash
-uv sync
+make test      # pytest
+make lint      # ruff check
+make format    # ruff format
 ```
-
-Основные команды:
-
-```bash
-make sync
-make lock
-make test
-make lint
-make format
-make doctor
-make reindex
-make eval
-```
-
-Эквиваленты через `uv`:
-
-```bash
-uv run pytest
-uv run ruff check .
-uv run ruff format .
-```
-
-## Текущее состояние кода
-
-Сейчас в репозитории уже есть:
-
-- `pyproject.toml` с `uv`-конфигурацией
-- `uv.lock`
-- `.venv`-совместимый workflow через `uv run`
-- `.gitignore`
-- package layout и `__init__.py`
-- базовые dataclass-модели в `src/domain/models.py`
-- protocol-интерфейсы в `src/domain/protocols.py`
-- минимальный smoke-test
-
-Сейчас в репозитории ещё нет:
-
-- рабочей реализации ingestion pipeline
-- схемы SQLite и миграций
-- реального индекса FTS5
-- интеграции с Qdrant
-- интеграции с Ollama
-- готового FastAPI приложения
-
-То есть это подготовленная основа под реализацию, а не завершённый продукт.
-
-## Тесты и качество
-
-Запуск тестов:
-
-```bash
-make test
-```
-
-Проверка линтером:
-
-```bash
-make lint
-```
-
-Форматирование:
-
-```bash
-make format
-```
-
-## Документация по архитектуре
-
-Подробный план, мотивация выбора стека и целевая data model описаны в [`PLAN.md`](./PLAN.md).
-
-Если нужен следующий шаг, логично продолжать в таком порядке:
-
-1. заполнить `config/settings.toml` и `src/core/config.py`
-2. реализовать чтение vault и Markdown parser
-3. собрать SQLite schema + FTS5 индекс
-4. реализовать dense/lexical/graph retrieval
-5. добавить локальный API и end-to-end сценарий запроса
