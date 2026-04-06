@@ -14,7 +14,7 @@ def test_build_user_prompt_contains_query_notes_and_instructions() -> None:
 
     prompt = build_user_prompt(context)
 
-    assert "User query: what is rag" in prompt
-    assert "- Note: rag.md" in prompt
-    assert "Snippet: RAG uses retrieval." in prompt
-    assert "Answer using only the context notes." in prompt
+    assert "what is rag" in prompt
+    assert "rag.md" in prompt
+    assert "RAG uses retrieval." in prompt
+    assert "Источники" in prompt

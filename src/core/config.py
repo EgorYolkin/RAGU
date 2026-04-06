@@ -5,21 +5,39 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+def _load_dotenv(path: Path = Path(".env")) -> None:
+    if not path.exists():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("\"'")
+        os.environ.setdefault(key, value)
+
+
 @dataclass(frozen=True)
 class Settings:
     vault_path: Path
     sqlite_path: Path = Path(".local/app.db")
     qdrant_path: Path = Path(".local/qdrant")
     ollama_base_url: str = "http://localhost:11434"
-    generator_model: str = "qwen3:8b"
-    embedding_model: str = "embeddinggemma"
+    generator_model: str = "gemma3:12b"
+    embedding_model: str = "nomic-embed-text"
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
-    ollama_keep_alive: str = "10m"
+    rerank_top_k: int = 24
+    final_top_k: int = 6
+    ollama_keep_alive: str = "-1"
     chunk_size: int = 800
     chunk_overlap: int = 120
+    context_token_budget: int = 400
 
     @classmethod
     def from_env(cls) -> Settings:
+        _load_dotenv()
         vault_path = Path(os.getenv("OBSIDIAN_RAG_VAULT_PATH", "vault")).expanduser()
         sqlite_path = Path(os.getenv("OBSIDIAN_RAG_SQLITE_PATH", ".local/app.db"))
         qdrant_path = Path(os.getenv("OBSIDIAN_RAG_QDRANT_PATH", ".local/qdrant"))
@@ -32,19 +50,24 @@ class Settings:
                 "OBSIDIAN_RAG_OLLAMA_BASE_URL",
                 "http://localhost:11434",
             ),
-            generator_model=os.getenv("OBSIDIAN_RAG_GENERATOR_MODEL", "qwen3:8b"),
+            generator_model=os.getenv("OBSIDIAN_RAG_GENERATOR_MODEL", "gemma3:12b"),
             embedding_model=os.getenv(
                 "OBSIDIAN_RAG_EMBEDDING_MODEL",
-                "embeddinggemma",
+                "nomic-embed-text",
             ),
             reranker_model=os.getenv(
                 "OBSIDIAN_RAG_RERANKER_MODEL",
                 "BAAI/bge-reranker-v2-m3",
             ),
+            rerank_top_k=int(os.getenv("OBSIDIAN_RAG_RERANK_TOP_K", "24")),
+            final_top_k=int(os.getenv("OBSIDIAN_RAG_FINAL_TOP_K", "6")),
             ollama_keep_alive=os.getenv(
                 "OBSIDIAN_RAG_OLLAMA_KEEP_ALIVE",
-                "10m",
+                "-1",
             ),
             chunk_size=int(os.getenv("OBSIDIAN_RAG_CHUNK_SIZE", "800")),
             chunk_overlap=int(os.getenv("OBSIDIAN_RAG_CHUNK_OVERLAP", "120")),
+            context_token_budget=int(
+                os.getenv("OBSIDIAN_RAG_CONTEXT_TOKEN_BUDGET", "400")
+            ),
         )

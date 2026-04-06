@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from src.core.config import Settings
 from src.ingest.chunker import MarkdownChunker
+from src.ingest.embedder import OllamaEmbedder
 from src.ingest.parser import MarkdownNoteParser
 from src.ingest.source import FileSystemNoteSource
 from src.services.indexing_service import IndexingService
@@ -18,6 +19,12 @@ def main() -> None:
             chunk_overlap=settings.chunk_overlap,
         ),
         database=SQLiteDatabase(settings.sqlite_path),
+        embedder=OllamaEmbedder(
+            base_url=settings.ollama_base_url,
+            model=settings.embedding_model,
+            keep_alive=settings.ollama_keep_alive,
+        ),
+        embedding_model=settings.embedding_model,
     )
     stats = service.reindex_all()
     print(

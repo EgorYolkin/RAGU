@@ -30,16 +30,50 @@ class SQLiteGraphRetriever:
                 return []
 
             path_placeholders = ", ".join("?" for _ in seed_paths)
+            # Resolve wikilink targets to actual note paths using three strategies:
+            # 1. Exact path match (target_path = notes.path)
+            # 2. Basename match: "notes/people.md" → "People.md"
+            #    (case-insensitive filename stem comparison)
+            # 3. Backlinks: notes that link TO any seed note
             rows = connection.execute(
                 f"""
-                WITH neighbor_paths AS (
-                    SELECT DISTINCT target_path AS path
+                WITH outbound_targets AS (
+                    SELECT DISTINCT target_path
                     FROM links
                     WHERE source_path IN ({path_placeholders})
+                ),
+                resolved_outbound AS (
+                    -- exact match
+                    SELECT DISTINCT n.path
+                    FROM outbound_targets ot
+                    JOIN notes n ON n.path = ot.target_path
                     UNION
+                    -- basename match (handles [[WikiLink]] → any/folder/WikiLink.md)
+                    SELECT DISTINCT n.path
+                    FROM outbound_targets ot
+                    JOIN notes n ON lower(
+                        CASE
+                            WHEN instr(n.path, '/') > 0
+                            THEN substr(n.path, length(n.path) - length(n.path) + instr(n.path, '/') + 1)
+                            ELSE n.path
+                        END
+                    ) = lower(
+                        CASE
+                            WHEN instr(ot.target_path, '/') > 0
+                            THEN substr(ot.target_path, length(ot.target_path) - length(ot.target_path) + instr(ot.target_path, '/') + 1)
+                            ELSE ot.target_path
+                        END
+                    )
+                ),
+                inbound_sources AS (
                     SELECT DISTINCT source_path AS path
                     FROM links
                     WHERE target_path IN ({path_placeholders})
+                ),
+                neighbor_paths AS (
+                    SELECT path FROM resolved_outbound
+                    UNION
+                    SELECT path FROM inbound_sources
                 )
                 SELECT
                     chunks.chunk_id,
@@ -48,7 +82,6 @@ class SQLiteGraphRetriever:
                     chunks.chunk_text
                 FROM neighbor_paths
                 JOIN chunks ON chunks.path = neighbor_paths.path
-                ORDER BY chunks.token_count DESC
                 LIMIT ?
                 """,
                 [*seed_paths, *seed_paths, limit],

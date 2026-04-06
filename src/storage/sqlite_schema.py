@@ -46,6 +46,14 @@ SCHEMA_STATEMENTS = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS chunk_embeddings (
+        chunk_id TEXT PRIMARY KEY,
+        embedding_blob BLOB NOT NULL,
+        model TEXT NOT NULL,
+        FOREIGN KEY(chunk_id) REFERENCES chunks(chunk_id) ON DELETE CASCADE
+    )
+    """,
+    """
     CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
         path UNINDEXED,
         title,

@@ -7,12 +7,13 @@ class FusionEngine:
     def merge(
         self,
         *,
+        dense: list[Candidate],
         lexical: list[Candidate],
         graph: list[Candidate],
     ) -> list[Candidate]:
         by_chunk_id: dict[str, Candidate] = {}
 
-        for candidate in lexical + graph:
+        for candidate in dense + lexical + graph:
             existing = by_chunk_id.get(candidate.chunk_id)
             if existing is None:
                 by_chunk_id[candidate.chunk_id] = candidate
@@ -34,6 +35,15 @@ class FusionEngine:
 
 
 def _candidate_sort_key(candidate: Candidate) -> float:
+    dense_score = candidate.scores.get("dense_score", 0.0)
     lexical_score = candidate.scores.get("lexical_score", 0.0)
+    title_match = candidate.scores.get("title_match", 0.0)
     graph_score = candidate.scores.get("graph_score", 0.0)
-    return (0.7 * lexical_score) + (0.3 * graph_score)
+    # title_match gets its own weight so title-matched notes beat
+    # irrelevant high-volume body matches when dense retrieval misses them.
+    return (
+        (0.45 * dense_score)
+        + (0.25 * lexical_score)
+        + (0.20 * title_match)
+        + (0.10 * graph_score)
+    )

@@ -16,6 +16,10 @@ class Chunker(Protocol):
     def chunk(self, note: ParsedNote) -> list[Chunk]: ...
 
 
+class Embedder(Protocol):
+    def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+
 class DenseRetriever(Protocol):
     def retrieve(self, query: str, limit: int) -> list[Candidate]: ...
 

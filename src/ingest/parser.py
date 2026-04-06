@@ -73,7 +73,24 @@ def _normalize_wikilink_target(target: str) -> str:
     return normalized
 
 
+def _build_basename_index(all_paths: list[str]) -> dict[str, str]:
+    """Map lowercase basename → first full path (for wikilink resolution)."""
+    index: dict[str, str] = {}
+    for path in all_paths:
+        basename = path.rsplit("/", 1)[-1].lower()
+        index.setdefault(basename, path)
+    return index
+
+
 class MarkdownNoteParser:
+    def __init__(self, all_paths: list[str] | None = None) -> None:
+        self._basename_index: dict[str, str] = (
+            _build_basename_index(all_paths) if all_paths else {}
+        )
+
+    def set_paths(self, all_paths: list[str]) -> None:
+        self._basename_index = _build_basename_index(all_paths)
+
     def parse(self, raw_note: RawNote) -> ParsedNote:
         if raw_note.text is None:
             raise ValueError(f"cannot parse note without text: {raw_note.path}")
@@ -144,6 +161,15 @@ class MarkdownNoteParser:
             sections.append(ParsedSection(heading_path=tuple(), text=body.strip()))
         return sections
 
+    def _resolve_target(self, raw_target: str) -> str:
+        normalized = _normalize_wikilink_target(raw_target)
+        if self._basename_index:
+            basename = normalized.rsplit("/", 1)[-1].lower()
+            resolved = self._basename_index.get(basename)
+            if resolved:
+                return resolved
+        return normalized
+
     def _parse_links(self, source_path: str, body: str) -> list[NoteLink]:
         links: list[NoteLink] = []
         for embed_flag, target, heading, _alias in WIKILINK_RE.findall(body):
@@ -153,7 +179,7 @@ class MarkdownNoteParser:
             links.append(
                 NoteLink(
                     source_path=source_path,
-                    target_path=_normalize_wikilink_target(target),
+                    target_path=self._resolve_target(target),
                     target_anchor=heading or None,
                     edge_type=edge_type,
                 )
